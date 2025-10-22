@@ -1,0 +1,209 @@
+React (10)
+
+Czym różni się state od props?
+
+Odp: Props są tylko-do-odczytu, przychodzą z zewnątrz; state jest lokalny i modyfikowany przez setState/useState.
+
+Dopytaj: gdzie trzymać „źródło prawdy”.
+
+Jak działa reconciler i klucze (key) na listach?
+
+Odp: Reconciler porównuje drzewa; key identyfikuje stabilnie elementy, zmniejsza przerenderowania/błędy z fokusami.
+
+Antywzór: używanie indeksu tablicy przy sortowaniu/filtrach.
+
+Różnica: useMemo vs useCallback?
+
+Odp: useMemo pamięta wynik funkcji, useCallback pamięta referencję funkcji. Oba zależne od tablicy deps.
+
+Dopytaj: kiedy nie używać (premature optimization).
+
+Jak działa batching aktualizacji stanu?
+
+Odp: Od React 18 batching jest domyślny w większej liczbie kontekstów (również asynch.). Wielokrotne setState w tym samym ticku łączone.
+
+Dopytaj: jak kontrolować aktualizacje zależne od poprzedniego stanu (funkcyjny setState).
+
+Controlled vs uncontrolled inputs?
+
+Odp: Controlled — wartość z React state; uncontrolled — DOM trzyma wartość (ref). Controlled daje walidację/źródło prawdy.
+
+Dopytaj: wpływ na wydajność.
+
+Suspense i lazy loading
+
+Odp: React.lazy + <Suspense fallback>, pozwala wstrzymać render do czasu spełnienia „zasobu”.
+
+Dopytaj: integracja z data fetchingiem (React 18/Server Components).
+
+React Server Components (RSC)
+
+Odp: Komponenty renderowane na serwerze, brak efektów i stanu klienta; mniejszy bundle, lepsze TTFB.
+
+Dopytaj: granice „server/client”, use client.
+
+Jak projektujesz Context vs Redux/Zustand?
+
+Odp: Context do rzadko zmieniających się, szeroko używanych danych; do częstych aktualizacji — dedykowany store, selektory, memozacja.
+
+Dopytaj: rozbijanie kontekstów.
+
+Efekty uboczne: useEffect — typowe pułapki
+
+Odp: Zależności muszą odzwierciedlać użycia; cleanup; unikać synchronizacji po renderze jeśli można obliczyć wcześniej.
+
+Dopytaj: różnica z useLayoutEffect.
+
+Optymalizacja renderów
+
+Odp: memo, selektory, useMemo/useCallback, klucze, splitting bundle, unikaj anonimowych propsów, virtualization list.
+
+Dopytaj: jak to mierzyć (React Profiler).
+
+TypeScript (10)
+
+Różnica: type vs interface?
+
+Odp: Oba opisują kształty; interface łączy się deklaratywnie (declaration merging), type ma unie/intersekcje i aliasy złożone.
+
+Unia vs intersekcja
+
+Odp: A | B jeden z kształtów; A & B oba naraz.
+
+Dopytaj: kiedy unia z dyskryminatorem.
+
+Narrowing (guardy typów)
+
+Odp: typeof, instanceof, check „in”, predykaty typu function isX(v): v is X.
+
+Dopytaj: exhaustiveness z never.
+
+Generics i ograniczenia (extends)
+
+Odp: Reużywalne typy z parametrami; extends ogranicza domenę; domyślne parametry <T = Default>.
+
+Zmienność: readonly, as const
+
+Odp: readonly blokuje mutacje; as const literalizuje wartości i czyni je readonly.
+
+Typowanie hooków i komponentów
+
+Odp: React.FC nie jest konieczne; lepiej typować propsy i PropsWithChildren; hooki zwracają złożone typy (tuples) — destrukturyzacja + inference.
+
+Mapped/Conditional types
+
+Odp: Partial, Pick, Record, własne: T extends U ? X : Y.
+
+Dopytaj: infer (infer R) wewnątrz warunkowych.
+
+Utility Types w TS
+
+Odp: Omit, Exclude, Extract, NonNullable, ReturnType, Parameters.
+
+Pytanie praktyczne: kiedy Pick+Partial.
+
+ESM/CJS, typy dla importów, resolveJsonModule
+
+Odp: Różnice w module resolution, esModuleInterop, allowSyntheticDefaultImports.
+
+Konfiguracja tsconfig
+
+Odp: strict: true, noImplicitAny, noUnused*, exactOptionalPropertyTypes, skipLibCheck(false w CI, true lokalnie).
+
+Dopytaj: ścieżki paths + aliasy.
+
+JavaScript (10)
+
+Event loop i kolejki (macrotasks/microtasks)
+
+Odp: Microtasks (Promises) mają priorytet przed nast. macrotask; render między kolejkami.
+
+Dopytaj: queueMicrotask, MutationObserver.
+
+this — wiązanie
+
+Odp: Zależne od sposobu wywołania: zwykłe, call/apply/bind, metodowe, new, strzałkowe (lexical this).
+
+Pułapka: utrata kontekstu przy callbacku.
+
+Hoisting
+
+Odp: Deklaracje var i funkcji hoistowane; let/const — TDZ.
+
+Dopytaj: różnice funkcja deklaracja vs wyrażenie.
+
+Immutability i strukturalne porównanie
+
+Odp: Object.is, === vs głębokie; kopiowanie płytkie/głębokie; structuredClone.
+
+Closures
+
+Odp: Funkcja zapamiętuje leksykalny zakres; praktyka: fabryki funkcji, once/memoize.
+
+Asynchroniczność: async/await
+
+Odp: await = unwrap Promise; błąd łapiemy try/catch; równoległość: Promise.all, allSettled.
+
+Dopytaj: pułapka „await w pętli”.
+
+Prototypy i klasy
+
+Odp: Klasy to cukier nad prototypami; metody na prototype; dziedziczenie, super.
+
+Moduły ESM
+
+Odp: import/export, top-level await, różnica z CJS.
+
+Dopytaj: tree-shaking i side effects.
+
+Optymalizacja: debouncing/throttling
+
+Odp: Debounce opóźnia do ciszy; throttle ogranicza częstotliwość. Zastosowania: scroll, resize, autosave.
+
+Bezpieczeństwo w przeglądarce
+
+Odp: XSS (escapowanie/dangerouslySetInnerHTML), CSRF (tokeny/sameSite), CORS, Content Security Policy.
+
+Git/GitHub (10)
+
+Strategia gałęzi
+
+Odp: Trunk-based (krótkie feature branche, częste merge), lub GitFlow (release/hotfix).
+
+Dopytaj: kiedy rebase vs merge.
+
+Rebase vs merge
+
+Odp: rebase przepisa historię (czytelna linia), merge zachowuje DAG i konteksty; nie rebase’uj zdalnych branchy współdzielonych.
+
+Squash commits
+
+Odp: Porządkuje historię feature’a w jeden commit; robić przy PR, zachować dobre commit message.
+
+Cherry-pick
+
+Odp: Przenosi pojedyncze commity między gałęziami; uwaga na konflikty i duplikaty.
+
+Code review „good practices”
+
+Odp: Małe PR-y, automaty (CI, lint, tests), checklisty, komentarze rzeczowe, wymagane 1–2 approv’y.
+
+Git hooks / CI
+
+Odp: pre-commit (lint, typecheck), pre-push (tests), w GitHub Actions: matryce Node, cache, artefakty.
+
+Rozwiązywanie konfliktów
+
+Odp: git merge --no-ff/rebase --rebase-merges, narzędzia do diff, testy po rozwiązaniu, git rerere w zespołach.
+
+Release’y i versioning
+
+Odp: SemVer, tagi (v1.2.3), changelog automatyczny (Conventional Commits), release drafter.
+
+Ochrona głównej gałęzi
+
+Odp: Branch protection rules: required status checks, linear history, code owners, podpisy commitów.
+
+Monorepo i workspaces
+
+Odp: pnpm/yarn/npm workspaces, Nx/Turborepo, „affected” test/build, cachowanie, izolacja CI.
