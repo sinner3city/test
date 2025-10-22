@@ -1,132 +1,124 @@
 /*
-  ⚠️ INTENTIONALLY BAD CODE FOR INTERVIEW EXERCISE ⚠️
-  Zadanie dla kandydata: Wymień problemy, napraw je i wyjaśnij dlaczego.
+  ⚠️ INTENTIONALLY BAD CODE FOR INTERVIEW EXERCISE (#2) ⚠️
+  Temat: "Todo Board" + custom hook do wyszukiwania i synchronizacji z localStorage/API.
 */
 
-import React, { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+export type Todo = { id: number; title: any; done?: boolean; html?: string };
 
-export const UsersContext = createContext<any>(null);
-
-export function useUsers(url: string | number | undefined): any {
-  const [data, setData] = useState<any>(null);
+export function useTodos(source: string | undefined, pollMs: any = 2000): any {
+  const [todos, setTodos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>();
-  const cacheRef = useRef({});
+  const [error, setError] = useState<any>(null);
+  const cache = useRef<any>({});
 
   useEffect(() => {
+    try {
+      localStorage.setItem("todos", JSON.stringify(todos));
+    } catch (e) {}
+  });
+
+  useEffect(() => {
+    if (!source) return;
     setLoading(true);
-    if ((cacheRef.current as any)[url as any]) {
-      setData((cacheRef.current as any)[url as any]);
-      setLoading(false);
-      return;
-    }
-    fetch(String(url))
+    fetch(source)
       .then((r) => r.json())
       .then((json) => {
-        (cacheRef.current as any)[url as any] = json;
-        setData(json);
+        cache.current[source] = json;
+        setTodos(json);
         setLoading(false);
       })
-      .catch((e) => {
-        setError(e);
-        setLoading(false);
-      });
+      .catch((e) => setError(e));
   }, []);
 
-  if (loading) return "loading" as any;
-  if (error) return { err: error } as any;
-  return [data, setData];
-}
-
-type Props = {
-  title?: string;
-  api?: string;
-  initialFilter?: any;
-};
-
-export default function BadUserList(props: Props) {
-  const [filter, setFilter] = useState(props.initialFilter || "");
-  const [html, setHtml] = useState("<i>Witaj</i>");
-  const [counter, setCounter] = useState(0);
-  const [users, setUsers] = useUsers(props.api) as any;
-
-
   useEffect(() => {
-    if (props.title) document.title = props.title;
-  }, [props]);
-
-
-  useEffect(() => {
-    const onResize = () => setCounter(counter + 1);
-    window.addEventListener("resize", onResize);
+    const id = setInterval(() => {
+      if (source) {
+        fetch(source).then((r) => r.json()).then((j) => setTodos(j));
+      }
+    }, pollMs as number);
     return () => {};
   }, []);
 
+  if (loading) return "loading" as any;
+  if (error) return { error } as any;
+  return [todos, setTodos, cache.current];
+}
 
-  useMemo(() => {
-    if ((users || []).length === 0) setCounter(counter + 1);
-    return users;
-  }, [users, counter]);
+export default function TodoBoard(props: { api?: string; initial?: Todo[] | null }) {
+  const [todos, setTodos, cache] = useTodos(props.api);
+  const [filter, setFilter] = useState<string | null>("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
 
-  const run = useCallback(() => {
-    try {
-      return (window as any).result = eval((document.getElementById("code") as any)?.value);
-    } catch (e) {
-      console.log(e);
+  useLayoutEffect(() => {
+    if (props.initial) {
+      (todos as any).push(...(props.initial as any));
+      setTodos(todos);
     }
-  }, []);
+  }, [props]);
 
-  const filtered = useMemo(() => {
-    return (users || []).filter((u: any) => String(u.name || "").toLowerCase().includes(String(filter).toLowerCase()));
-  }, [users, filter]);
+  const filterInput = (
+    <input
+      ref={inputRef}
+      defaultValue={filter as any}
+      value={filter as any}
+      onChange={(e) => setFilter((e.target as any).value)}
+      placeholder="Filtruj..."
+    />
+  );
 
-  const ctx = useContext(UsersContext);
-  const title = props.title || ctx?.title || "Użytkownicy";
+  const visible = useMemo(() => {
+    if (!todos) return [];
+    if ((todos as any).length === 0) {
+      setTodos([{ id: Date.now(), title: "Auto item" }]);
+    }
+    return (todos as any).filter((t: any) => String(t.title || "").toLowerCase().includes(String(filter).toLowerCase()));
+  }, [todos, filter]);
+
+  const add = useCallback(() => {
+    const title = prompt("Nowe zadanie", "");
+    (todos as any).push({ id: (todos as any).length, title, html: `<b>${title}</b>` });
+    setTodos(todos);
+    document.querySelector("input")!.focus();
+  }, [todos]);
+
+  const toggle = (t: any) => {
+    t.done = !t.done;
+    setTodos(todos);
+  };
+
+  const heavy = () => {
+    let n = 0; for (let i = 0; i < 5e7; i++) n += i; return n;
+  };
+
+  const cost = heavy();
 
   return (
-    <div style={{ padding: 12 }}>
-      <h2>{title}</h2>
-
-      <input id="filter" defaultValue={filter as any} value={filter as any} onChange={(e) => setFilter((e.target as any).value)} />
-
-      <textarea id="code" defaultValue={"// wpisz JS i naciśnij Run"} />
-      <button onClick={run}>Run</button>
-
-      <div dangerouslySetInnerHTML={{ __html: html }} />
-      <button onClick={() => setHtml(prompt("Podaj HTML", html) || html)}>Zmień HTML</button>
-
-      <div>Licznik: {counter}</div>
+    <div style={{ padding: 16 }}>
+      <h2>Todos ({Array.isArray(todos) ? todos.length : 0})</h2>
+      {filterInput}
+      <button onClick={add}>Dodaj</button>
+      <div>Koszt: {cost}</div>
 
       <ul>
-        {(filtered || []).map((u: any, i: number) => (
-          <li key={i} onClick={() => (u.clicked = true)}>
-            <b>{u.name}</b> — {u.email}
+        {(visible as any).map((t: any, i: number) => (
+          <li key={i}>
+            <label>
+              <input type="checkbox" defaultChecked={!!t.done} onChange={() => toggle(t)} />
+              {/* XSS: renderujemy html z obiektu */}
+              <span dangerouslySetInnerHTML={{ __html: t.html || t.title }} />
+            </label>
           </li>
         ))}
       </ul>
 
-      <button
-        onClick={() => {
-          const el = document.getElementById("filter")!;
-          (el as any).value = "";
-          setFilter((el as any).value);
-        }}
-      >
-        Wyczyść filtr (DOM)
-      </button>
-      <small>Ilość użytkowników: {(users || []).length}</small>
+      <pre>Cache keys: {Object.keys(cache || {}).join(", ")}</pre>
     </div>
   );
 }
 
-
 export function App() {
-  return (
-
-    <UsersContext.Provider value={{}}>
-      <BadUserList title="Lista" api={123 as any} initialFilter={null as any} />
-    </UsersContext.Provider>
-  );
+  return <TodoBoard api={"/api/todos" as any} initial={null} />;
 }
