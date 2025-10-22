@@ -1,167 +1,155 @@
 /*
-  ⚠️ INTENTIONALLY BAD CODE FOR INTERVIEW EXERCISE ⚠️
-  Zadanie dla kandydata: Wymień problemy, napraw je i wyjaśnij dlaczego.
+  ⚠️ INTENTIONALLY BAD CODE FOR INTERVIEW EXERCISE (#2) ⚠️
+  Temat: "Todo Board" + custom hook do wyszukiwania i synchronizacji z localStorage/API.
 */
 
-import React, { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-// ==== Niepotrzebny i źle użyty context ====
-export const UsersContext = createContext<any>(null); // any + brak domyślnych wartości
+// ===== Custom hook z wieloma problemami =====
+// - niestabilne API (zwraca różne kształty w zależności od stanu)
+// - brak czyszczenia setInterval
+// - brak AbortController / wyścigi zapytań
+// - błędne zależności efektów, stale closures
+// - luźne typy i mutacje
+// - zapis do localStorage na każdym renderze
 
-// ==== Custom hook z licznymi problemami ====
-// - nadmiar any
-// - zależności w useEffect są błędne (pusta tablica, ale używamy url)
-// - mutujemy stan bezpiecznie? nie
-// - nieobsłużone wyjątki, brak abort controllera
-// - zwracamy różne kształty w zależności od stanu (nieprzewidywalny typ)
-export function useUsers(url: string | number | undefined): any {
-  const [data, setData] = useState<any>(null);
+export type Todo = { id: number; title: any; done?: boolean; html?: string };
+
+export function useTodos(source: string | undefined, pollMs: any = 2000): any {
+  const [todos, setTodos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>();
-  const cacheRef = useRef({});
+  const [error, setError] = useState<any>(null);
+  const cache = useRef<any>({});
 
-  // BŁĄD: używanie url z pustą tablicą deps powoduje stale closure
+  // BŁĄD: efekt bez deps – odpalany po każdym renderze
   useEffect(() => {
+    try {
+      localStorage.setItem("todos", JSON.stringify(todos)); // spamuje localStorage
+    } catch (e) {}
+  });
+
+  // BŁĄD: zależności pominięte, stale closure na source/pollMs
+  useEffect(() => {
+    if (!source) return;
     setLoading(true);
-    // BŁĄD: brak walidacji URL i brak AbortController
-    if ((cacheRef.current as any)[url as any]) {
-      // BŁĄD: bez klonowania i bez resetu erroru
-      setData((cacheRef.current as any)[url as any]);
-      setLoading(false);
-      return;
-    }
-    fetch(String(url))
+    fetch(source)
       .then((r) => r.json())
       .then((json) => {
-        (cacheRef.current as any)[url as any] = json;
-        setData(json);
+        cache.current[source] = json;
+        setTodos(json);
         setLoading(false);
       })
-      .catch((e) => {
-        setError(e);
-        setLoading(false);
-      });
-  }, []); // <- brak url w deps
+      .catch((e) => setError(e));
+  }, []); // <- powinno zależeć od source
 
-  // BŁĄD: niestabilne API hooka
+  // BŁĄD: nieczytelne odpytywanie w pętli + brak cleanupu
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (source) {
+        fetch(source).then((r) => r.json()).then((j) => setTodos(j));
+      }
+    }, pollMs as number);
+    return () => {};// brak clearInterval(id)
+  }, []);
+
+  // API hooka: czasem string, czasem obiekt z err, czasem tuple
   if (loading) return "loading" as any;
-  if (error) return { err: error } as any;
-  return [data, setData]; // czasem string, czasem object, czasem tuple
+  if (error) return { error } as any;
+  return [todos, setTodos, cache.current];
 }
 
-// ==== Komponent z anty‑wzorcami ====
-// - wiele stanów pochodnych, które można obliczyć w locie
-// - niepotrzebne useMemo/useCallback
-// - niebezpieczne dangerouslySetInnerHTML
+// ===== Zły komponent TodoBoard =====
 // - mieszanie controlled/uncontrolled inputs
-// - brak key lub index jako key
-// - event listeners bez cleanupu
-// - niepoprawne typy i rzutowania
-// - bezsensowny re-render przez mutację stanu
-// - fetch wywoływany w renderze (przez eval) – potencjalna pętla
+// - setState w useMemo (efekt uboczny)
+// - niepotrzebny useLayoutEffect
+// - ręczna manipulacja DOM i focus bez zabezpieczeń
+// - klucze z indexem i mutacje w miejscu
+// - niepoprawne typy i uogólnienia `any`
+// - XSS przez dangerouslySetInnerHTML
+// - wydajnościowe miny (ciężkie obliczenia w renderze)
 
-type Props = {
-  title?: string;
-  api?: string; // np. "https://jsonplaceholder.typicode.com/users"
-  initialFilter?: any; // any
-};
+export default function TodoBoard(props: { api?: string; initial?: Todo[] | null }) {
+  const [todos, setTodos, cache] = useTodos(props.api);
+  const [filter, setFilter] = useState<string | null>("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-export default function BadUserList(props: Props) {
-  const [filter, setFilter] = useState(props.initialFilter || "");
-  const [html, setHtml] = useState("<i>Witaj</i>");
-  const [counter, setCounter] = useState(0);
-  const [users, setUsers] = useUsers(props.api) as any; // BŁĄD: zakładamy tuple
-
-  // BŁĄD: kopiowanie props do state bez powodu
-  useEffect(() => {
-    if (props.title) document.title = props.title; // efekt globalny bez cleanupu
-  }, [props]); // zbyt szeroka zależność
-
-  // BŁĄD: globalny event listener bez cleanupu
-  useEffect(() => {
-    const onResize = () => setCounter(counter + 1); // stale closure
-    window.addEventListener("resize", onResize);
-    return () => {
-      // BŁĄD: zapomniany removeEventListener – memory leak
-      // window.removeEventListener("resize", onResize);
-    };
-  }, []);
-
-  // BŁĄD: bezużyteczny useMemo, do tego mutuje stan w środku (antywzorzec)
-  useMemo(() => {
-    if ((users || []).length === 0) setCounter(counter + 1); // side‑effect w useMemo
-    return users;
-  }, [users, counter]);
-
-  // BŁĄD: niepotrzebny i niebezpieczny eval bazujący na wejściu użytkownika
-  const run = useCallback(() => {
-    try {
-      // np. wpisanie "fetch(props.api)" wywoła fetch w renderze/kliknięciu i może zapętlić UI
-      // @ts-ignore
-      return (window as any).result = eval((document.getElementById("code") as any)?.value);
-    } catch (e) {
-      console.log(e);
+  // BŁĄD: bez sensu kopiujemy props.do state w efekcie layoutu
+  useLayoutEffect(() => {
+    if (props.initial) {
+      // mutujemy bezpośrednio wynik hooka
+      (todos as any).push(...(props.initial as any));
+      setTodos(todos);
     }
-  }, []);
+  }, [props]); // zbyt szerokie deps
 
-  const filtered = useMemo(() => {
-    // BŁĄD: operacje defensywne bez typów
-    return (users || []).filter((u: any) => String(u.name || "").toLowerCase().includes(String(filter).toLowerCase()));
-  }, [users, filter]);
+  // BŁĄD: mieszane controlled/uncontrolled (defaultValue + value)
+  const filterInput = (
+    <input
+      ref={inputRef}
+      defaultValue={filter as any}
+      value={filter as any}
+      onChange={(e) => setFilter((e.target as any).value)}
+      placeholder="Filtruj..."
+    />
+  );
 
-  const ctx = useContext(UsersContext); // BŁĄD: nigdy nie podajemy providera, więc null
-  const title = props.title || ctx?.title || "Użytkownicy";
+  // BŁĄD: efekt w useMemo – powoduje pętle
+  const visible = useMemo(() => {
+    if (!todos) return [];
+    if ((todos as any).length === 0) {
+      // side effect
+      setTodos([{ id: Date.now(), title: "Auto item" }]);
+    }
+    return (todos as any).filter((t: any) => String(t.title || "").toLowerCase().includes(String(filter).toLowerCase()));
+  }, [todos, filter]);
+
+  const add = useCallback(() => {
+    const title = prompt("Nowe zadanie", "");
+    // BŁĄD: mutacja w miejscu + brak id unikalnego
+    (todos as any).push({ id: (todos as any).length, title, html: `<b>${title}</b>` });
+    setTodos(todos);
+    // ręczna manipulacja DOM i focus
+    document.querySelector("input")!.focus();
+  }, [todos]);
+
+  const toggle = (t: any) => {
+    t.done = !t.done; // mutacja – brak immutability
+    setTodos(todos);
+  };
+
+  const heavy = () => {
+    // BŁĄD: ciężkie obliczenia w renderze/blokowanie UI
+    let n = 0; for (let i = 0; i < 5e7; i++) n += i; return n;
+  };
+
+  // BŁĄD: wywołanie kosztownej funkcji wprost w JSX
+  const cost = heavy();
 
   return (
-    <div style={{ padding: 12 }}>
-      <h2>{title}</h2>
+    <div style={{ padding: 16 }}>
+      <h2>Todos ({Array.isArray(todos) ? todos.length : 0})</h2>
+      {filterInput}
+      <button onClick={add}>Dodaj</button>
+      <div>Koszt: {cost}</div>
 
-      {/* Mieszanie controlled i uncontrolled */}
-      <input id="filter" defaultValue={filter as any} value={filter as any} onChange={(e) => setFilter((e.target as any).value)} />
-
-      {/* Pole do eval – XSS/arb. code execution */}
-      <textarea id="code" defaultValue={"// wpisz JS i naciśnij Run"} />
-      <button onClick={run}>Run</button>
-
-      {/* Niebezpieczne HTML z wejścia */}
-      <div dangerouslySetInnerHTML={{ __html: html }} />
-      <button onClick={() => setHtml(prompt("Podaj HTML", html) || html)}>Zmień HTML</button>
-
-      <div>Licznik: {counter}</div>
-
-      {/* Brak key albo index jako key */}
       <ul>
-        {(filtered || []).map((u: any, i: number) => (
-          <li key={i} onClick={() => (u.clicked = true)}> {/* mutacja obiektu */}
-            <b>{u.name}</b> — {u.email}
+        {(visible as any).map((t: any, i: number) => (
+          <li key={i}>
+            <label>
+              <input type="checkbox" defaultChecked={!!t.done} onChange={() => toggle(t)} />
+              {/* XSS: renderujemy html z obiektu */}
+              <span dangerouslySetInnerHTML={{ __html: t.html || t.title }} />
+            </label>
           </li>
         ))}
       </ul>
 
-      {/* Antywzorzec: bezpośrednia manipulacja DOM */}
-      <button
-        onClick={() => {
-          const el = document.getElementById("filter")!; // non‑null assertion
-          (el as any).value = "";
-          setFilter((el as any).value); // stan i DOM rozjeżdżają się
-        }}
-      >
-        Wyczyść filtr (DOM)
-      </button>
-
-      {/* BŁĄD: brak obsługi stanu ładowania/błędu z hooka */}
-      <small>Ilość użytkowników: {(users || []).length}</small>
+      <pre>Cache keys: {Object.keys(cache || {}).join(", ")}</pre>
     </div>
   );
 }
 
-// ==== Przykładowe użycie (też niedoskonałe) ====
+// ===== Przykładowe użycie =====
 export function App() {
-  return (
-    // BŁĄD: Provider bez wartości sensownej
-    <UsersContext.Provider value={{}}>
-      {/* BŁĄD: przekazujemy liczbę jako URL, hook zrobi String(url) */}
-      <BadUserList title="Lista" api={123 as any} initialFilter={null as any} />
-    </UsersContext.Provider>
-  );
+  return <TodoBoard api={"/api/todos" as any} initial={null} />;
 }
